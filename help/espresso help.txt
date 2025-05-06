@@ -1,0 +1,33 @@
+UC Berkeley, Espresso Version #2.3, Release date 01/31/88
+
+SYNOPSIS: espresso [options] [file]
+
+  -d        Enable debugging
+  -e[opt]   Select espresso option:
+                fast, ness, nirr, nunwrap, onset, pos, strong,
+                eat, eatdots, kiss, random
+  -o[type]  Select output format:
+                f, fd, fr, fdr, pleasure, eqntott, kiss, cons
+  -rn-m     Select range for subcommands:
+                d1merge: first and last variables (0 ... m-1)
+                minterms: first and last variables (0 ... m-1)
+                opoall: first and last outputs (0 ... m-1)
+  -s        Provide short execution summary
+  -t        Provide longer execution trace
+  -x        Suppress printing of solution
+  -v[type]  Verbose debugging detail (-v '' for all)
+  -D[cmd]   Execute subcommand 'cmd':
+                ESPRESSO, many, exact, qm, single_output, so, so_both,
+                simplify, echo, signature, opo, opoall, pair, pairall,
+                check, stats, verify, PLAverify, equiv, map, mapdc, fsm,
+                contain, d1merge, d1merge_in, disjoint, dsharp, intersect,
+                minterms, primes, separate, sharp, union, xor, essen,
+                expand, gasp, irred, make_sparse, reduce, taut, super_gasp,
+                lexsort, test
+  -Sn       Select strategy for subcommands:
+                opo: bit2=exact bit1=repeated bit0=skip sparse
+                opoall: 0=minimize, 1=exact
+                pair: 0=algebraic, 1=strongd, 2=espresso, 3=exact
+                pairall: 0=minimize, 1=exact, 2=opo
+                so_espresso: 0=minimize, 1=exact
+                so_both: 0=minimize, 1=exact
