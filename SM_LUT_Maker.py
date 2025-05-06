@@ -47,8 +47,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         elif operation == 3:
             z = (a >= b)
         elif operation == 4:
-            с = (a * b) >> x
-            z = dont_care(operation, с)
+            c = (a * b) >> x
+            z = dont_care(operation, c)
         elif operation == 5:
             z = (a * b) & ((1 << x) - 1)
         elif operation == 6:
@@ -160,9 +160,9 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 espresso_args.append("../truth.pla")
             else:
                 espresso_args.append("truth_generated.pla")
-            print("Sending command:", ["Espresso.exe", *espresso_args])
+            print("Sending command:", ["espresso", *espresso_args])
             minimizer = subprocess.run(
-                ["Espresso.exe", *espresso_args],
+                ["espresso", *espresso_args],
                 capture_output=True,
                 text = True
             )
@@ -174,7 +174,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             print("Minimized with Espresso")
         elif minimization_type == 2:
             minimizer = subprocess.Popen(
-            ["abc.exe"],
+            ["abc"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -643,14 +643,13 @@ if __name__ == "__main__":
     output_queue = None
     root = tk.Tk()
     root.title("SM LUT Maker by Karaolli")
-    root.iconbitmap("icon.ico")
+    root.iconphoto(False, tk.PhotoImage(file="icon.png"))
     root.geometry(f"590x706+{root.winfo_screenwidth() // 2 - 295}+{root.winfo_screenheight() // 2 - 353}")
     root.resizable(False, False)
     style = ttk.Style(root)
     style.configure(".", padding=(4, 4), font=("Segoe UI", 9))
     style.configure("Title.Label", padding=(4, 8), font=("Segoe UI", 13))
     style.configure("Generate.TButton", padding=(4, 8), font=("Segoe UI", 13))
-
 
 
     title_frame = ttk.Labelframe(root)
