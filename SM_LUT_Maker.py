@@ -1,6 +1,6 @@
 manual = 0
 
-operation_names = ["Addition", "Subtraction", "Multiplication", "Comparison", "(a * b) >> 4", "(a * b) & 15", "Sine"]
+operation_names = ["Addition", "Subtraction", "Multiplication", "Comparison", "(a * b) >> 4", "(a * b) & 15", "Sine", "1/A"]
 
 def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_input, external_pla_bool, minimization_type, exact, fast, single_output, single_output_both, output_phase_optimization_all, strong, Quality, Cubes, espresso_args, width, length, length_fill, use_custom_path, blueprint_path, output_queue):
     if not manual:
@@ -54,6 +54,10 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         elif operation == 6:
             c = math.sin(2*math.pi * a/(1 << aBits))
             z = float_to_bin(c, x)
+        elif operation == 7:
+            if a != 0:
+                z = float_to_bin(16/a, x)
+            else: z = 0
 
         return z
 
@@ -72,6 +76,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             maxValueZ = 15
         elif operation == 6:
             maxValueZ = (4 << x) - 1
+        elif operation == 7:
+            maxValueZ = (16 << x) - 1
 
         return maxValueZ
 
@@ -115,6 +121,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         with open("truth_generated.pla", "w") as truth:
             truth.write(f".i {inputs}\n")
             truth.write(f".o {outputs}\n")
+            truth.write(f".p {powIbits}\n")
             for inputInt in range(0, powIbits):
                 inputBin = format(inputInt, f'0{inputs}b')
                 for i in range(0, inputs):
@@ -211,7 +218,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         minimized_filename = "truth_generated.pla"
 
     with open(minimized_filename, "r") as pla:
-        print("Building...")
+        print("Building", end='')
         if length_fill:
             first_coordinate = "y"
         else:
@@ -292,6 +299,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                         for i in range (inputs * 4, inputs * 4 + outputs):
                             blueprint["bodies"][0]["childs"][i]["controller"]["mode"] = 2
                 mask_bool = False
+            elif line[0] == ".p":
+                print(',', line[1], "gates to build...", end='')
             elif line[0] == ".e":
                 continue
             elif line[0][0] != '.':       #            ________cubes
@@ -307,7 +316,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                     blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
                     gate["controller"]["mode"] = temp
                     mask_bool = True
-                    #print("Ignore this", line[1])
+                    #print("\nIgnore this", line[1])
                 else:
                     for i in range(0, inputs):    #   inputs
                         if line[0][i] != '-':
@@ -347,14 +356,14 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                         gate["pos"]["x"] += 1
     if inputs_stats:
         if mask_fix >= len(inputs_stats) // 2:
-            print("Bad mask_fix value")
+            print("\nBad mask_fix value")
         elif mask_bool and (inputs_stats[mask_fix * 2] == 255 and inputs_stats[mask_fix * 2 + 1] <= 255 or inputs_stats[mask_fix * 2] <= 255 and inputs_stats[mask_fix * 2 + 1] == 255):
-            print("If you see this message try changing the value mask_fix to a different input")
+            print("\nIf you see this message try changing the value mask_fix to a different input")
     if not use_custom_path:
         blueprint_path = ".."
     with open(blueprint_path + "/blueprint.json", "w") as blueprintjson:
         blueprintjson.write(json.dumps(blueprint, separators=(',', ':')))
-    print("Finished")
+    print("\nFinished")
 
 
 import math
