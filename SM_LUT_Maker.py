@@ -192,13 +192,22 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             else:
                 truth_filename = "truth_generated.pla"
             stdout, stderr = minimizer.communicate(
-            #"read_pla truth.pla\ncollapse\nwrite_pla col.pla\n&exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " collapsed.pla minimized.pla" \
+            #"read_pla " + truth_filename + "; collapse; write_pla collapsed.pla; &exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " collapsed.pla minimized.pla"
             "&exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " " + truth_filename + " minimized.pla"
             )
-            if "The size of the starting cover is more than" in stdout:
-                print("The size of the starting cover is more than", Cubes, "cubes. Quitting...\nTry increasing the maximum amount of cubes")
-                return
             #print("Standard output: ", stdout)
+            if not stdout.endswith("> "):
+                print("Error: ", end='')
+                if stdout.endswith(" cubes. Quitting...\nSomething went wrong when minimizing the cover\n"):
+                    print("The size of the starting cover is more than", Cubes, "cubes. Quitting...\nTry increasing the maximum amount of cubes")
+                    return
+                elif stdout.endswith(" Unexpected memory allocation problem. Quitting...\nSomething went wrong when minimizing the cover\n"):
+                    print("Unexpected memory allocation problem. Quitting...\nThe function is too big")
+                    return
+                else:
+                    print("Unknown error")
+                    print("Standard output: ", stdout)
+                    return
             if stderr:
                 print("Errors: ", stderr)
                 return
@@ -216,7 +225,6 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         minimized_filename = "../truth.pla"
     else:
         minimized_filename = "truth_generated.pla"
-
     with open(minimized_filename, "r") as pla:
         print("Building", end='')
         if length_fill:
