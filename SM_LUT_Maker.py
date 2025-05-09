@@ -150,6 +150,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 truth.write('\n')
             truth.write(".e")
         print("Truth table generated")
+    else:
+        print("Reading truth.pla")
 
 
     if minimization_type < 3:
@@ -197,19 +199,14 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             )
             #print("Standard output: ", stdout)
             if not stdout.endswith("> "):
-                print("Error: ", end='')
+                print("Error:", stdout.split('>')[1].removesuffix('\n'), sep='')
                 if stdout.endswith(" cubes. Quitting...\nSomething went wrong when minimizing the cover\n"):
-                    print("The size of the starting cover is more than", Cubes, "cubes. Quitting...\nTry increasing the maximum amount of cubes")
-                    return
-                elif stdout.endswith(" Unexpected memory allocation problem. Quitting...\nSomething went wrong when minimizing the cover\n"):
-                    print("Unexpected memory allocation problem. Quitting...\nThe function is too big")
-                    return
-                else:
-                    print("Unknown error")
-                    print("Standard output: ", stdout)
-                    return
+                    print("Try increasing the maximum amount of cubes")
+                elif stdout.endswith("Unexpected memory allocation problem. Quitting...\nSomething went wrong when minimizing the cover\n"):
+                    print("Usually this means that the function is too big/complex, but I'm investigating this. Pressing the button several times might help.")
+                return
             if stderr:
-                print("Errors: ", stderr)
+                print("Errors:", stderr)
                 return
             print("Minimized with Exorcism")
 
@@ -307,6 +304,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                         for i in range (inputs * 4, inputs * 4 + outputs):
                             blueprint["bodies"][0]["childs"][i]["controller"]["mode"] = 2
                 mask_bool = False
+                inputOverflow_bool = False
+                outputOverflow_bool = False
             elif line[0] == ".p":
                 print(',', line[1], "gates to build...", end='')
             elif line[0] == ".e":
@@ -330,18 +329,21 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                         if line[0][i] != '-':
                             if line[0][i] == '1' and minimization_type != 1 or line[0][i] == '0' and minimization_type == 1:
                                 if inputs_stats[i] == 255:
-                                    print(f"Input {inputs - i} exceeded 255 output connections")    
+                                    inputOverflow_bool = True
+                                    print(f"\nInput {inputs - i} exceeded 255 output connections", end='')    
                                 inputs_stats[i] += 1
                                 blueprint["bodies"][0]["childs"][((inputs - i - 1 + aBits) % inputs) * 4]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                             if line[0][i] == '0' and minimization_type != 1 or line[0][i] == '1' and minimization_type == 1:
                                 if inputs_stats[i + 1] == 255:
-                                    print(f"Input {inputs - i} inverted exceeded 255 output connections")
+                                    inputOverflow_bool = True
+                                    print(f"\nInput {inputs - i} inverted exceeded 255 output connections", end='')
                                 inputs_stats[i + 1] += 1
                                 blueprint["bodies"][0]["childs"][((inputs - i - 1 + aBits) % inputs) * 4 + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                     for i in range(outputs - 1, -1, -1):    #   outputs
                         if line[1][i] == '1':
                             if outputs_stats[i] == 255:
-                                print(f"Output {outputs - i} exceeded 255 input connections")    
+                                outputOverflow_bool = True
+                                print(f"\nOutput {outputs - i} exceeded 255 input connections", end='')    
                             outputs_stats[i] += 1
                             gate["controller"]["controllers"].append({"id":outputs - i - 1 + inputs * 4})
                     blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
@@ -367,6 +369,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             print("\nBad mask_fix value")
         elif mask_bool and (inputs_stats[mask_fix * 2] == 255 and inputs_stats[mask_fix * 2 + 1] <= 255 or inputs_stats[mask_fix * 2] <= 255 and inputs_stats[mask_fix * 2 + 1] == 255):
             print("\nIf you see this message try changing the value mask_fix to a different input")
+    if inputOverflow_bool and not outputOverflow_bool:
+        print("\nDetected input overflow but not output overflow. Please let me know and I should fix this.")
     if not use_custom_path:
         blueprint_path = ".."
     with open(blueprint_path + "/blueprint.json", "w") as blueprintjson:
