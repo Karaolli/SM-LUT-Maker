@@ -47,8 +47,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         elif operation == 3:
             z = (a >= b)
         elif operation == 4:
-            c = (a * b) >> x
-            #z = dont_care(operation, c)
+            z = (a * b) >> x
+            z = dont_care(operation, z)
         elif operation == 5:
             z = (a * b) & ((1 << x) - 1)
         elif operation == 6:
