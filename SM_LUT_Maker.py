@@ -323,27 +323,27 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                     blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
                     gate["controller"]["mode"] = temp
                     mask_bool = True
-                    #print("\nIgnore this", line[1])
+                    #print("\nMask: ", line[1])
                 else:
                     for i in range(inputs):    #   inputs
                         if line[0][i] != '-':
                             if line[0][i] == '1' and minimization_type != 1 or line[0][i] == '0' and minimization_type == 1:
-                                if inputs_stats[i] == 255:
+                                if inputs_stats[i * 2] == 255:
                                     inputOverflow_bool = True
                                     print(f"\nInput {inputs - i} exceeded 255 output connections", end='')
-                                inputs_stats[i] += 1
+                                inputs_stats[i * 2] += 1
                                 blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * 4]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                             if line[0][i] == '0' and minimization_type != 1 or line[0][i] == '1' and minimization_type == 1:
-                                if inputs_stats[i + 1] == 255:
+                                if inputs_stats[i * 2 + 1] == 255:
                                     inputOverflow_bool = True
                                     print(f"\nInput {inputs - i} inverted exceeded 255 output connections", end='')
-                                inputs_stats[i + 1] += 1
+                                inputs_stats[i * 2 + 1] += 1
                                 blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * 4 + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                     for i in range(outputs - 1, -1, -1):    #   outputs
                         if line[1][i] == '1':
                             if outputs_stats[i] == 255:
                                 outputOverflow_bool = True
-                                print(f"\nOutput {outputs - i} exceeded 255 input connections", end='')    
+                                print(f"\nOutput {outputs - i} exceeded 255 input connections", end='')
                             outputs_stats[i] += 1
                             gate["controller"]["controllers"].append({"id":outputs - i - 1 + inputs * 4})
                     blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
@@ -370,7 +370,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         elif mask_bool and (inputs_stats[mask_fix * 2] == 255 and inputs_stats[mask_fix * 2 + 1] <= 255 or inputs_stats[mask_fix * 2] <= 255 and inputs_stats[mask_fix * 2 + 1] == 255):
             print("\nIf you see this message try changing the value mask_fix to a different input")
     if inputOverflow_bool and not outputOverflow_bool:
-        print("\nDetected input overflow but not output overflow. I'm already working to fix this.")
+        print("\nDetected input overflow but not output overflow. Please let me know and I should fix this.")
     elif outputOverflow_bool:
         print("\nDetected output overflow. The circuit wont function as intended.")
     if not use_custom_path:
