@@ -23,9 +23,6 @@ ESOP minimization is done using EXORCISM-4 from Berkeley's ABC.
 ## Building
 If you need, you can also modify the `input_splits` and `output_splits` lists to change how input and output rows of gates are split, for example if you make a function that takes in 3 numbers.  
 
-If you get a message that an input or output exceeded 255 connections, the circuit most likely won't function as intended.  
-If you only get such message for inputs, but not for outputs, please let me know.  
-
 ### Other
 The program allows for saving and loading of configurations. A file with the name `autoload` gets loaded on startup of the program if it exists.  
 

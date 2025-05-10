@@ -1,6 +1,6 @@
 manual = 0
 
-operation_names = ["Addition", "Subtraction", "Multiplication", "Comparison", "(a * b) >> 4", "(a * b) & 15", "Sine", "1/A"]
+operation_names = ["Addition", "Subtraction", "Multiplication", "Comparison", "(a * b) >> x", "(a * b) & ((1 << x) - 1)", "Sine", "1/A"]
 
 def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_input, external_pla_bool, minimization_type, exact, fast, single_output, single_output_both, output_phase_optimization_all, strong, Quality, Cubes, espresso_args, width, length, length_fill, use_custom_path, blueprint_path, output_queue):
     if not manual:
@@ -48,7 +48,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             z = (a >= b)
         elif operation == 4:
             c = (a * b) >> x
-            z = dont_care(operation, c)
+            #z = dont_care(operation, c)
         elif operation == 5:
             z = (a * b) & ((1 << x) - 1)
         elif operation == 6:
@@ -71,9 +71,9 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         elif operation == 3:
             maxValueZ = 1
         if operation == 4:
-            maxValueZ = (maxValueA * maxValueB) >> 4
+            maxValueZ = (maxValueA * maxValueB) >> x
         elif operation == 5:
-            maxValueZ = 15
+            maxValueZ = ((1 << x) - 1)
         elif operation == 6:
             maxValueZ = (4 << x) - 1
         elif operation == 7:
@@ -84,7 +84,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
     def dont_care(operation, z):
         zbin = format(z, f'0{zBits}b')
         if operation == 4:
-            for i in range(0, zBits // 2):
+            for i in range(zBits // 2):
                 truth.write('-')
             for i in range(zBits // 2, zBits):
                 truth.write(zbin[i])
@@ -113,7 +113,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
     powIbits = 1 << inputs
     powZbits = 1 << zBits
     def dont_care_line():
-        for i in range(0, outputs):
+        for i in range(outputs):
             truth.write('-')
         truth.write('\n')
     if not external_pla_bool:
@@ -122,9 +122,9 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             truth.write(f".i {inputs}\n")
             truth.write(f".o {outputs}\n")
             truth.write(f".p {powIbits}\n")
-            for inputInt in range(0, powIbits):
+            for inputInt in range(powIbits):
                 inputBin = format(inputInt, f'0{inputs}b')
-                for i in range(0, inputs):
+                for i in range(inputs):
                     truth.write(inputBin[i])
                 truth.write(' ')
                 a = inputInt >> bBits
@@ -145,7 +145,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                     for i in range(len(zbin) - zBits, len(zbin)):
                         if zbin[i] == '1': truth.write('0')
                         else: truth.write('1')
-                for i in range(0, zBits):
+                for i in range(zBits):
                     truth.write(zbin[i])
                 truth.write('\n')
             truth.write(".e")
@@ -210,8 +210,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 return
             print("Minimized with Exorcism")
 
-
-    blueprint = {"bodies":[{"childs":[]}],"dependencies":[{"contentId":"0d079c85-2b7a-4424-8d1b-5a9da6a4d59e","name":"Logic Gate Visibility Fix","shapeIds":["9f0f56e8-2c31-4d83-996c-d00a9b296c3f"],"steamFileId":3340095265}],"version":4}
+    
+    blueprint = {"bodies":[{"childs":[]}],"version":4}
 
     gate = {"color":"","controller":{"active":False,"controllers":[],"id":0,"joints":None,"mode":0},"pos":{"x":0,"y":0,"z":0},"shapeId":"9f0f56e8-2c31-4d83-996c-d00a9b296c3f","xaxis":-2,"zaxis":-1}
     switch = {"color":"DF7F01","controller":{"active":False,"controllers":[{"id":2}],"id":0,"joints":None},"pos":{"x":-3,"y":0,"z":2},"shapeId":"7cf717d7-d167-4f2d-a6e7-6b2c70aa3986","xaxis":1,"zaxis":-2}
@@ -237,7 +237,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 inputs_stats = []
                 gate["pos"]["x"] = -1
                 blank = ""
-                for i in range(0, inputs):
+                for i in range(inputs):
                     inputs_stats.append(0)
                     inputs_stats.append(0)
                     if i in input_splits:
@@ -283,7 +283,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 else:
                     gate["controller"]["mode"] = 1
                 gate["color"] = "E2DB13"
-                for i in range(0, outputs):
+                for i in range(outputs):
                     outputs_stats.append(0)
                     if i in output_splits:
                         gate["pos"]["x"] -= 1
@@ -325,20 +325,20 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                     mask_bool = True
                     #print("\nIgnore this", line[1])
                 else:
-                    for i in range(0, inputs):    #   inputs
+                    for i in range(inputs):    #   inputs
                         if line[0][i] != '-':
                             if line[0][i] == '1' and minimization_type != 1 or line[0][i] == '0' and minimization_type == 1:
                                 if inputs_stats[i] == 255:
                                     inputOverflow_bool = True
-                                    print(f"\nInput {inputs - i} exceeded 255 output connections", end='')    
+                                    print(f"\nInput {inputs - i} exceeded 255 output connections", end='')
                                 inputs_stats[i] += 1
-                                blueprint["bodies"][0]["childs"][((inputs - i - 1 + aBits) % inputs) * 4]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                                blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * 4]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                             if line[0][i] == '0' and minimization_type != 1 or line[0][i] == '1' and minimization_type == 1:
                                 if inputs_stats[i + 1] == 255:
                                     inputOverflow_bool = True
                                     print(f"\nInput {inputs - i} inverted exceeded 255 output connections", end='')
                                 inputs_stats[i + 1] += 1
-                                blueprint["bodies"][0]["childs"][((inputs - i - 1 + aBits) % inputs) * 4 + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                                blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * 4 + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                     for i in range(outputs - 1, -1, -1):    #   outputs
                         if line[1][i] == '1':
                             if outputs_stats[i] == 255:
@@ -370,7 +370,9 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         elif mask_bool and (inputs_stats[mask_fix * 2] == 255 and inputs_stats[mask_fix * 2 + 1] <= 255 or inputs_stats[mask_fix * 2] <= 255 and inputs_stats[mask_fix * 2 + 1] == 255):
             print("\nIf you see this message try changing the value mask_fix to a different input")
     if inputOverflow_bool and not outputOverflow_bool:
-        print("\nDetected input overflow but not output overflow. Please let me know and I should fix this.")
+        print("\nDetected input overflow but not output overflow. I'm already working to fix this.")
+    elif outputOverflow_bool:
+        print("\nDetected output overflow. The circuit wont function as intended.")
     if not use_custom_path:
         blueprint_path = ".."
     with open(blueprint_path + "/blueprint.json", "w") as blueprintjson:
@@ -722,7 +724,7 @@ if __name__ == "__main__":
     zInverted_widget = ttk.Checkbutton(math_frame, text="Include inverted outputs", variable=zInverted_var)
     zInverted_widget.grid(row=2, column=4, columnspan=4)
 
-    custom_input_label = ttk.Label(math_frame, text="Custom input:")
+    custom_input_label = ttk.Label(math_frame, text="Custom input X:")
     custom_input_label.grid(row=1, column=6, padx=8)
     custom_input_var = tk.IntVar()
     custom_input_widget = ttk.Spinbox(math_frame, from_=-2147483648, to=2147483647, textvariable=custom_input_var, width=8)
