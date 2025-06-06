@@ -1,7 +1,6 @@
 manual = 0
 
-operation_names = ["Addition", "Subtraction", "Multiplication", "Comparison", "(a * b) >> x", "(a * b) & ((1 << x) - 1)", "Sine", "1/A"]
-
+operation_names = ["Addition", "Subtraction", "Multiplication", "Comparison", "a * b >> x", "a * b & (1 << x) - 1", "Sine", "1/A", "KM"]
 def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_input, external_pla_bool, minimization_type, exact, fast, single_output, single_output_both, output_phase_optimization_all, strong, Quality, Cubes, espresso_args, width, length, length_fill, use_custom_path, blueprint_path, output_queue):
     if not manual:
         sys.stdout = QueueWriter(output_queue)
@@ -47,10 +46,12 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         elif operation == 3:
             z = (a >= b)
         elif operation == 4:
-            z = (a * b) >> x
-            z = dont_care(operation, z)
+            z = a * b >> x
+            #z = dont_care(operation, z)
         elif operation == 5:
-            z = (a * b) & ((1 << x) - 1)
+            #z = a * b
+            #if z > (1 << x) - 1: return "skip"
+            z = a * b & (1 << x) - 1
         elif operation == 6:
             c = math.sin(2*math.pi * a/(1 << aBits))
             z = float_to_bin(c, x)
@@ -58,26 +59,40 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             if a != 0:
                 z = float_to_bin(16/a, x)
             else: z = 0
+        elif operation == 8:
+            d = b >> aBits // 2         #   dddd cccc
+            c = b - (d << aBits // 2)
+            d = d * a         #     dddd dddd dddd
+            c = c * a         #          cccc cccc cccc
+            if d > 255: return "skip"
+            d = d & (1 << aBits) - 1
+            c = c >> aBits // 2
+            #carry = ((d & 1 << aBits // 2 - 1) + (c & 1 << aBits // 2 - 1)) >> aBits // 2
+            z = (d << aBits) + c
+            #z = d + c
+            if d + c > 255: return "skip"
 
         return z
 
-    def operation_lengths(operation):   #     define the length of the output here.  if you want a specific amount of bits do  maxValueZ = (1 << your_number) - 1
-        if operation == 0:
+    def operation_lengths(operation):   #     define the length of the output here.  if you want a specific amount of bits do  maxValueZ = 1 << your_number - 1
+        if operation == 0:      # Addition
             maxValueZ = maxValueA + maxValueB
-        elif operation == 1:
+        elif operation == 1:    # Subtraction
             maxValueZ = maxValueA
-        elif operation == 2:
+        elif operation == 2:    # Multiplication
             maxValueZ = maxValueA * maxValueB
-        elif operation == 3:
+        elif operation == 3:    # Comparison
             maxValueZ = 1
-        if operation == 4:
-            maxValueZ = (maxValueA * maxValueB) >> x
-        elif operation == 5:
-            maxValueZ = ((1 << x) - 1)
-        elif operation == 6:
+        elif operation == 4:    # a * b >> x
+            maxValueZ = maxValueA * maxValueB >> x
+        elif operation == 5:    # a * b & (1 << x) - 1
+            maxValueZ = (1 << x) - 1
+        elif operation == 6:    # Sine
             maxValueZ = (4 << x) - 1
-        elif operation == 7:
+        elif operation == 7:    # 1/a
             maxValueZ = (16 << x) - 1
+        elif operation == 8:    # KM
+            maxValueZ = (1 << aBits * 2) - 1
 
         return maxValueZ
 
@@ -194,7 +209,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             else:
                 truth_filename = "truth_generated.pla"
             stdout, stderr = minimizer.communicate(
-            #"read_pla " + truth_filename + "; collapse; write_pla collapsed.pla; &exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " collapsed.pla minimized.pla"
+            #"read_pla " + truth_filename + "; resyn2; write_pla collapsed.pla; &exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " collapsed.pla minimized.pla"
             "&exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " " + truth_filename + " minimized.pla"
             )
             #print("Standard output: ", stdout)
@@ -224,128 +239,171 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         minimized_filename = "truth_generated.pla"
     with open(minimized_filename, "r") as pla:
         print("Building", end='')
+        inputs_stats = []
+        for i in range(inputs):
+            inputs_stats.append(0)
+            inputs_stats.append(0)
+        outputs_stats = []
+        for i in range(outputs):
+            outputs_stats.append(0)
+        for linestr in pla:
+            if linestr[0] == '#':
+                continue
+            line = linestr.split()
+            if line[0] == ".i":
+                inputs  = int(line[1])
+            elif line[0] == ".o":
+                outputs = int(line[1])
+            elif line[0] == ".p":
+                print(',', line[1], "gates to build...", end='')
+            elif linestr[0] != '.':
+                for i in range(inputs):
+                    if line[0][i] != '-':
+                        if line[0][i] == '1' and minimization_type != 1 or line[0][i] == '0' and minimization_type == 1:
+                            inputs_stats[(inputs - i - 1) * 2    ] += 1
+                        elif line[0][i] == '0' and minimization_type != 1 or line[0][i] == '1' and minimization_type == 1:
+                            inputs_stats[(inputs - i - 1) * 2 + 1] += 1
+                for i in range(outputs):
+                    if line[1][i] == '1':
+                        outputs_stats[i] += 1
+        pla.seek(0)
+        inputOverflow255_bool = False
+        inputOverflow510_bool = False
+        outputOverflow_bool = False
+        for idx, connections in enumerate(inputs_stats):
+            if connections > 255:
+                inputOverflow255_bool = True
+                if connections > 510:
+                    inputOverflow510_bool = True
+                    print(f"\nInput {idx} exceeded 510 connections.", end='')
+            inputs_stats[idx] = 0
+        if inputOverflow255_bool: switch["pos"]["z"] += 1
+        for idx, connections in enumerate(outputs_stats):
+            if connections > 255:
+                outputOverflow_bool = True
+                print(f"\nOutput {idx} exceeded 255 input connections.", end='')
+#                                                                                ________inputs
+        gate["pos"]["x"] = -1
+        blank = ""
+        for i in range(inputs):
+            if i in input_splits:
+                gate["pos"]["x"] -= 2
+                gate["pos"]["y"] = 0
+                switch["pos"]["x"] -= 2
+                switch["pos"]["y"] = 0
+            gate["color"] = "0A3EE2"
+            gate["controller"]["mode"] = 1
+            blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
+            gate["controller"]["id"] += 1
+            gate["pos"]["x"] -= 1
+            gate["color"] = "0F2E91"
+            gate["controller"]["mode"] = 4
+            blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
+            gate["controller"]["id"] += 1
+            if inputOverflow255_bool:
+                gate["pos"]["z"] += 1
+                gate["color"] = "0A3EE2"
+                gate["controller"]["mode"] = 1
+                blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
+                gate["controller"]["id"] += 1
+                gate["pos"]["x"] -= 1
+                gate["color"] = "0F2E91"
+                gate["controller"]["mode"] = 4
+                blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
+                gate["controller"]["id"] += 1
+                gate["controller"]["controllers"].append({"id":gate["controller"]["id"] - 3})
+                gate["controller"]["controllers"].append({"id":gate["controller"]["id"] - 4})
+                switch["controller"]["controllers"][0]["id"] += 2
+            gate["pos"]["z"] += 1
+            gate["color"] = "0A3EE2"
+            gate["controller"]["mode"] = 1
+            gate["controller"]["controllers"].append({"id":gate["controller"]["id"] - 1})
+            gate["controller"]["controllers"].append({"id":gate["controller"]["id"] - 2})
+            blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
+            gate["controller"]["controllers"].clear()
+            gate["controller"]["id"] += 1
+            switch["controller"]["id"] = gate["controller"]["id"]
+            blueprint["bodies"][0]["childs"].append(copy.deepcopy(switch))
+            switch["controller"]["controllers"][0]["id"] += 4
+            gate["controller"]["id"] += 1
+            switch["pos"]["y"] += 1
+            gate["pos"]["z"] = 0
+            gate["pos"]["x"] += 1
+            gate["pos"]["y"] += 1
+            blank += '-'
+        gate["pos"]["y"] = 0
+        gate["pos"]["x"] -= 2
+        inputsEndId = gate["controller"]["id"]
+#                                                                            ________outputs
+        if minimization_type == 1:
+            gate["controller"]["mode"] = 0
+        elif minimization_type == 2:
+            gate["controller"]["mode"] = 3
+        else:
+            gate["controller"]["mode"] = 1
+        gate["color"] = "E2DB13"
+        for i in range(outputs):
+            if i in output_splits:
+                gate["pos"]["x"] -= 1
+                gate["pos"]["y"] = 0
+            blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
+            gate["controller"]["id"] += 1
+            gate["pos"]["y"] += 1
+        gate["pos"]["x"] = 0
+        gate["pos"]["y"] = 0
+        gate["color"] = "DF7F01"
+        if minimization_type == 1:
+            gate["controller"]["mode"] = 1
+            for i in range (inputsEndId, inputsEndId + outputs):
+                blueprint["bodies"][0]["childs"][i]["controller"]["mode"] = 0
+        else:
+            gate["controller"]["mode"] = 0
+            if minimization_type == 2:
+                for i in range (inputsEndId, inputsEndId + outputs):
+                    blueprint["bodies"][0]["childs"][i]["controller"]["mode"] = 2
+        mask_bool = False
+        outputsEndId = gate["controller"]["id"]
+    
         if length_fill:
             first_coordinate = "y"
         else:
             first_coordinate = "x"
         for linestr in pla:
-            if linestr[0] == '#':
-                continue
-            line = linestr.split()
-            if line[0] == ".i":       #          ________inputs
-                inputs = int(line[1])
-                inputs_stats = []
-                gate["pos"]["x"] = -1
-                blank = ""
-                for i in range(inputs):
-                    inputs_stats.append(0)
-                    inputs_stats.append(0)
-                    if i in input_splits:
-                        gate["pos"]["x"] -= 2
-                        gate["pos"]["y"] = 0
-                        switch["pos"]["x"] -= 2
-                        switch["pos"]["y"] = 0
-                    gate["color"] = "0A3EE2"
-                    gate["controller"]["mode"] = 1
-                    blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
-                    gate["controller"]["id"] += 1
-                    gate["pos"]["x"] -= 1
-                    gate["color"] = "0F2E91"
-                    gate["controller"]["mode"] = 4
-                    blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
-                    gate["controller"]["id"] += 1
-                    gate["pos"]["z"] += 1
-                    gate["color"] = "0A3EE2"
-                    gate["controller"]["mode"] = 1
-                    gate["controller"]["controllers"].append({"id":gate["controller"]["id"] - 1})
-                    gate["controller"]["controllers"].append({"id":gate["controller"]["id"] - 2})
-                    blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
-                    gate["controller"]["controllers"].clear()
-                    gate["controller"]["id"] += 1
-                    switch["controller"]["id"] = gate["controller"]["id"]
-                    blueprint["bodies"][0]["childs"].append(copy.deepcopy(switch))
-                    switch["controller"]["controllers"][0]["id"] += 4
-                    gate["controller"]["id"] += 1
-                    switch["pos"]["y"] += 1
-                    gate["pos"]["z"] -= 1
-                    gate["pos"]["x"] += 1
-                    gate["pos"]["y"] += 1
-                    blank += '-'
-                gate["pos"]["y"] = 0
-                gate["pos"]["x"] -= 2
-            elif line[0] == ".o":       #         ________outputs
-                outputs = int(line[1])
-                outputs_stats = []
-                if minimization_type == 1:
-                    gate["controller"]["mode"] = 0
-                elif minimization_type == 2:
-                    gate["controller"]["mode"] = 3
-                else:
-                    gate["controller"]["mode"] = 1
-                gate["color"] = "E2DB13"
-                for i in range(outputs):
-                    outputs_stats.append(0)
-                    if i in output_splits:
-                        gate["pos"]["x"] -= 1
-                        gate["pos"]["y"] = 0
-                    blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
-                    gate["controller"]["id"] += 1
-                    gate["pos"]["y"] += 1
-                gate["pos"]["x"] = 0
-                gate["pos"]["y"] = 0
-                gate["color"] = "DF7F01"
-                if minimization_type == 1:
-                    gate["controller"]["mode"] = 1
-                    for i in range (inputs * 4, inputs * 4 + outputs):
-                        blueprint["bodies"][0]["childs"][i]["controller"]["mode"] = 0
-                else:
-                    gate["controller"]["mode"] = 0
-                    if minimization_type == 2:
-                        for i in range (inputs * 4, inputs * 4 + outputs):
-                            blueprint["bodies"][0]["childs"][i]["controller"]["mode"] = 2
-                mask_bool = False
-                inputOverflow_bool = False
-                outputOverflow_bool = False
-            elif line[0] == ".p":
-                print(',', line[1], "gates to build...", end='')
-            elif line[0] == ".e":
-                continue
-            elif line[0][0] != '.':       #            ________cubes
+            if linestr[0] != '#' and linestr[0] != '.':             #                         ________cubes
+                line = linestr.split()
                 gate["controller"]["controllers"].clear()
                 if line[0] == blank:
-                    blueprint["bodies"][0]["childs"][0 + mask_fix * 2]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
-                    blueprint["bodies"][0]["childs"][1 + mask_fix * 2]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                    blueprint["bodies"][0]["childs"][mask_fix * (4 + 2 * inputOverflow255_bool) + 2 * inputOverflow255_bool    ]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                    blueprint["bodies"][0]["childs"][mask_fix * (4 + 2 * inputOverflow255_bool) + 2 * inputOverflow255_bool + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                     temp = gate["controller"]["mode"]
                     gate["controller"]["mode"] = 1
                     for i in range(outputs - 1, -1, -1):    #   outputs
                         if line[1][i] == '1':
-                            gate["controller"]["controllers"].append({"id":outputs - i - 1 + inputs * 4})
+                            gate["controller"]["controllers"].append({"id":outputsEndId - 1 - i})
                     blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
                     gate["controller"]["mode"] = temp
+                    inputs_stats[mask_fix    ] += 1
+                    inputs_stats[mask_fix + 1] += 1
                     mask_bool = True
                     #print("\nMask: ", line[1])
                 else:
                     for i in range(inputs):    #   inputs
                         if line[0][i] != '-':
                             if line[0][i] == '1' and minimization_type != 1 or line[0][i] == '0' and minimization_type == 1:
-                                if inputs_stats[i * 2] == 255:
-                                    inputOverflow_bool = True
-                                    print(f"\nInput {inputs - i} exceeded 255 output connections", end='')
-                                inputs_stats[i * 2] += 1
-                                blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * 4]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
-                            if line[0][i] == '0' and minimization_type != 1 or line[0][i] == '1' and minimization_type == 1:
-                                if inputs_stats[i * 2 + 1] == 255:
-                                    inputOverflow_bool = True
-                                    print(f"\nInput {inputs - i} inverted exceeded 255 output connections", end='')
-                                inputs_stats[i * 2 + 1] += 1
-                                blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * 4 + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                                next_row = False
+                                if inputs_stats[(inputs - i - 1) * 2    ] >= 255:
+                                    next_row = True
+                                blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * (4 + 2 * inputOverflow255_bool) + 2 * next_row    ]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                                inputs_stats[(inputs - i - 1) * 2    ] += 1
+                            elif line[0][i] == '0' and minimization_type != 1 or line[0][i] == '1' and minimization_type == 1:
+                                next_row = False
+                                if inputs_stats[(inputs - i - 1) * 2 + 1] >= 255:
+                                    next_row = True
+                                blueprint["bodies"][0]["childs"][((inputs - 1 + aBits - i) % inputs) * (4 + 2 * inputOverflow255_bool) + 2 * next_row + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                                inputs_stats[(inputs - i - 1) * 2 + 1] += 1
                     for i in range(outputs - 1, -1, -1):    #   outputs
                         if line[1][i] == '1':
-                            if outputs_stats[i] == 255:
-                                outputOverflow_bool = True
-                                print(f"\nOutput {outputs - i} exceeded 255 input connections", end='')
-                            outputs_stats[i] += 1
-                            gate["controller"]["controllers"].append({"id":outputs - i - 1 + inputs * 4})
+                            gate["controller"]["controllers"].append({"id":outputsEndId - 1 - i})
                     blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
                 gate["controller"]["id"] += 1
                 gate["pos"][first_coordinate] += 1
@@ -367,9 +425,9 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
     if inputs_stats:
         if mask_fix >= len(inputs_stats) // 2:
             print("\nBad mask_fix value")
-        elif mask_bool and (inputs_stats[mask_fix * 2] == 255 and inputs_stats[mask_fix * 2 + 1] <= 255 or inputs_stats[mask_fix * 2] <= 255 and inputs_stats[mask_fix * 2 + 1] == 255):
+        elif mask_bool and (inputs_stats[mask_fix * 2] == 511 and inputs_stats[mask_fix * 2 + 1] <= 510 or inputs_stats[mask_fix * 2] <= 510 and inputs_stats[mask_fix * 2 + 1] == 511):
             print("\nIf you see this message try changing the value mask_fix to a different input")
-    if inputOverflow_bool and not outputOverflow_bool:
+    if inputOverflow510_bool and not outputOverflow_bool:
         print("\nDetected input overflow but not output overflow. Please let me know and I should fix this.")
     elif outputOverflow_bool:
         print("\nDetected output overflow. The circuit wont function as intended.")
@@ -393,8 +451,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext
 from idlelib.tooltip import Hovertip
 from multiprocessing import Process, Queue
-
-
+import importlib
+import operations
+importlib.reload(operations)
 def save_config(filename_str):
     try:
         with open("Configs/" + filename_str, "w") as cfg:
