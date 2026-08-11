@@ -1,6 +1,5 @@
 manual = 0
 
-operation_names = ["Addition", "Subtraction", "Multiplication", "Comparison", "a * b >> x", "a * b & (1 << x) - 1", "Sine", "1/A", "KM"]
 def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_input, external_pla_bool, minimization_type, exact, fast, single_output, single_output_both, output_phase_optimization_all, strong, Quality, Cubes, espresso_args, width, length, length_fill, use_custom_path, blueprint_path, output_queue):
     if not manual:
         sys.stdout = QueueWriter(output_queue)
@@ -31,95 +30,19 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
         length_fill = 0
         use_custom_path = 0   #   will save to root folder if 0   
         blueprint_path = "C:/Users"    #   paths should use forward slashes
-    
+
+    importlib.reload(ops)
+
     x = custom_input
-    
-    def operations(operation):   # to mark the entire output as don't care use   return "skip"
-        if operation == 0:
-            z = a + b
-        elif operation == 1:
-            z = a - b
-            if z < 0:
-                z += powZbits
-        elif operation == 2:
-            z = a * b
-        elif operation == 3:
-            z = (a >= b)
-        elif operation == 4:
-            z = a * b >> x
-            #z = dont_care(operation, z)
-        elif operation == 5:
-            #z = a * b
-            #if z > (1 << x) - 1: return "skip"
-            z = a * b & (1 << x) - 1
-        elif operation == 6:
-            c = math.sin(2*math.pi * a/(1 << aBits))
-            z = float_to_bin(c, x)
-        elif operation == 7:
-            if a != 0:
-                z = float_to_bin(16/a, x)
-            else: z = 0
-        elif operation == 8:
-            d = b >> aBits // 2         #   dddd cccc
-            c = b - (d << aBits // 2)
-            d = d * a         #     dddd dddd dddd
-            c = c * a         #          cccc cccc cccc
-            if d > 255: return "skip"
-            d = d & (1 << aBits) - 1
-            c = c >> aBits // 2
-            #carry = ((d & 1 << aBits // 2 - 1) + (c & 1 << aBits // 2 - 1)) >> aBits // 2
-            z = (d << aBits) + c
-            #z = d + c
-            if d + c > 255: return "skip"
-
-        return z
-
-    def operation_lengths(operation):   #     define the length of the output here.  if you want a specific amount of bits do  maxValueZ = 1 << your_number - 1
-        if operation == 0:      # Addition
-            maxValueZ = maxValueA + maxValueB
-        elif operation == 1:    # Subtraction
-            maxValueZ = maxValueA
-        elif operation == 2:    # Multiplication
-            maxValueZ = maxValueA * maxValueB
-        elif operation == 3:    # Comparison
-            maxValueZ = 1
-        elif operation == 4:    # a * b >> x
-            maxValueZ = maxValueA * maxValueB >> x
-        elif operation == 5:    # a * b & (1 << x) - 1
-            maxValueZ = (1 << x) - 1
-        elif operation == 6:    # Sine
-            maxValueZ = (4 << x) - 1
-        elif operation == 7:    # 1/a
-            maxValueZ = (16 << x) - 1
-        elif operation == 8:    # KM
-            maxValueZ = (1 << aBits * 2) - 1
-
-        return maxValueZ
-
-    def dont_care(operation, z):
-        zbin = format(z, f'0{zBits}b')
-        if operation == 4:
-            for i in range(zBits // 2):
-                truth.write('-')
-            for i in range(zBits // 2, zBits):
-                truth.write(zbin[i])
-        return "customskip"
-    
-    def float_to_bin(number, precision: int):
-        v = int(round(number * (1 << precision)))
-        if v < 0:
-            v += powZbits
-        return v
 
     input_splits = [aBits]
 
-    mask_fix = 0
     if not maxValueA:
         maxValueA = (1 << aBits) - 1
     if not maxValueB:
         maxValueB = (1 << bBits) - 1
 
-    maxValueZ = operation_lengths(operation)
+    maxValueZ = ops.operation_lengths(aBits, bBits, x, maxValueA, maxValueB, operation)
     zBits = len(bin(maxValueZ)) - 2
 
     output_splits = [zBits]
@@ -147,11 +70,12 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 if a > maxValueA or b > maxValueB:
                     dont_care_line()
                     continue
-                z = operations(operation)
+                z = ops.operations(a, b, aBits, bBits, x, operation, powZbits, zBits)
                 if z == "skip":
                     dont_care_line()
                     continue
-                elif z == "customskip":
+                elif isinstance(z, str):
+                    truth.write(z)
                     truth.write('\n')
                     continue
                 
@@ -210,6 +134,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 truth_filename = "truth_generated.pla"
             stdout, stderr = minimizer.communicate(
             #"read_pla " + truth_filename + "; resyn2; write_pla collapsed.pla; &exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " collapsed.pla minimized.pla"
+            #"read_pla truth_generated.pla; strash; rewrite; refactor; rewrite; balance; write_blif simplified.blif; &exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " " + "simplified.blif" + " minimized.pla"
             "&exorcism -V 0 -Q " + str(Quality) + " -C " + str(Cubes) + " " + truth_filename + " minimized.pla"
             )
             #print("Standard output: ", stdout)
@@ -255,7 +180,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             elif line[0] == ".o":
                 outputs = int(line[1])
             elif line[0] == ".p":
-                print(',', line[1], "gates to build...", end='')
+                gates_stats = int(line[1])
             elif linestr[0] != '.':
                 for i in range(inputs):
                     if line[0][i] != '-':
@@ -266,6 +191,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 for i in range(outputs):
                     if line[1][i] == '1':
                         outputs_stats[i] += 1
+        print(f", {gates_stats} gates, {sum(inputs_stats) + sum(outputs_stats)} connections...", end='')
         pla.seek(0)
         inputOverflow255_bool = False
         inputOverflow510_bool = False
@@ -302,6 +228,7 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
             gate["controller"]["id"] += 1
             if inputOverflow255_bool:
                 gate["pos"]["z"] += 1
+                gate["pos"]["x"] += 1
                 gate["color"] = "0A3EE2"
                 gate["controller"]["mode"] = 1
                 blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
@@ -373,8 +300,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                 line = linestr.split()
                 gate["controller"]["controllers"].clear()
                 if line[0] == blank:
-                    blueprint["bodies"][0]["childs"][mask_fix * (4 + 2 * inputOverflow255_bool) + 2 * inputOverflow255_bool    ]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
-                    blueprint["bodies"][0]["childs"][mask_fix * (4 + 2 * inputOverflow255_bool) + 2 * inputOverflow255_bool + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                    blueprint["bodies"][0]["childs"][ops.mask_fix * (4 + 2 * inputOverflow255_bool) + 2 * inputOverflow255_bool    ]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
+                    blueprint["bodies"][0]["childs"][ops.mask_fix * (4 + 2 * inputOverflow255_bool) + 2 * inputOverflow255_bool + 1]["controller"]["controllers"].append({"id":copy.copy(gate["controller"]["id"])})
                     temp = gate["controller"]["mode"]
                     gate["controller"]["mode"] = 1
                     for i in range(outputs - 1, -1, -1):    #   outputs
@@ -382,8 +309,8 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                             gate["controller"]["controllers"].append({"id":outputsEndId - 1 - i})
                     blueprint["bodies"][0]["childs"].append(copy.deepcopy(gate))
                     gate["controller"]["mode"] = temp
-                    inputs_stats[mask_fix    ] += 1
-                    inputs_stats[mask_fix + 1] += 1
+                    inputs_stats[ops.mask_fix    ] += 1
+                    inputs_stats[ops.mask_fix + 1] += 1
                     mask_bool = True
                     #print("\nMask: ", line[1])
                 else:
@@ -423,22 +350,20 @@ def main(aBits, bBits, maxValueA, maxValueB, operation, zInverted_bool, custom_i
                         gate["pos"]["z"] = 0
                         gate["pos"]["x"] += 1
     if inputs_stats:
-        if mask_fix >= len(inputs_stats) // 2:
-            print("\nBad mask_fix value")
-        elif mask_bool and (inputs_stats[mask_fix * 2] == 511 and inputs_stats[mask_fix * 2 + 1] <= 510 or inputs_stats[mask_fix * 2] <= 510 and inputs_stats[mask_fix * 2 + 1] == 511):
-            print("\nIf you see this message try changing the value mask_fix to a different input")
+        if ops.mask_fix >= len(inputs_stats) // 2:
+            print("\nBad ops.mask_fix value")
+        elif mask_bool and (inputs_stats[ops.mask_fix * 2] == 511 and inputs_stats[ops.mask_fix * 2 + 1] <= 510 or inputs_stats[ops.mask_fix * 2] <= 510 and inputs_stats[ops.mask_fix * 2 + 1] == 511):
+            print("\nIf you see this message try changing the value ops.mask_fix to a different input")
     if inputOverflow510_bool and not outputOverflow_bool:
         print("\nDetected input overflow but not output overflow. Please let me know and I should fix this.")
     elif outputOverflow_bool:
-        print("\nDetected output overflow. The circuit wont function as intended.")
+        print("\nDetected output overflow. The circuit won't function as intended.")
     if not use_custom_path:
         blueprint_path = ".."
     with open(blueprint_path + "/blueprint.json", "w") as blueprintjson:
         blueprintjson.write(json.dumps(blueprint, separators=(',', ':')))
     print("\nFinished")
 
-
-import math
 
 import subprocess
 
@@ -452,8 +377,8 @@ from tkinter import ttk, filedialog, scrolledtext
 from idlelib.tooltip import Hovertip
 from multiprocessing import Process, Queue
 import importlib
-import operations
-importlib.reload(operations)
+import operations as ops
+
 def save_config(filename_str):
     try:
         with open("Configs/" + filename_str, "w") as cfg:
@@ -562,6 +487,11 @@ def external_pla_func():
         zInverted_widget.config(state="normal")
         custom_input_label.config(state="normal")
         custom_input_widget.config(state="normal")
+
+def operation_func(event=None):
+    importlib.reload(ops)
+    operation_widget['values'] = ops.operation_names
+
 
 def minimization_type_func(event=None):
     index = minimization_type_widget['values'].index(minimization_type_widget.get())
@@ -675,6 +605,11 @@ def output_func(text):
     output_widget.configure(state="disabled")
     output_widget.see(tk.END)
 
+class output_class:
+    def write(text):
+        output_func(text)
+
+
 def poll_output():
     try:
         while True:
@@ -720,7 +655,8 @@ def save_blueprint_path():
 
 
 if __name__ == "__main__":
-    os.chdir("resources")
+    os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)),"resources"))
+    #os.chdir("resources")
     main_process = None
     output_queue = None
     root = tk.Tk()
@@ -775,7 +711,8 @@ if __name__ == "__main__":
 
     operation_label = ttk.Label(math_frame, text="Operation:")
     operation_label.grid(row=2, column=1, sticky="e")
-    operation_widget = ttk.Combobox(math_frame, values=operation_names, width=20, state="readonly")
+    operation_widget = ttk.Combobox(math_frame, values=ops.operation_names, width=20, state="readonly")
+    operation_widget.bind("<Button-1>", operation_func) #importlib.reload(ops)
     operation_widget.current(0)
     operation_widget.grid(row=2, column=2, columnspan=3, sticky="w")
 
@@ -927,8 +864,11 @@ if __name__ == "__main__":
     output_widget = scrolledtext.ScrolledText(root, wrap="word", width=10, height=8, state="disabled")
     output_widget.grid(row=7, padx=10, pady=4, sticky="we")
     
-    sys.stdout.write = output_func
-    sys.stderr.write = output_func
+    sys.stdout = output_class
+    sys.stderr = output_class
+
+    #sys.stdout.write = output_func
+    #sys.stderr.write = output_func
 
     if "autoload" in configs:
         load_config("autoload")
